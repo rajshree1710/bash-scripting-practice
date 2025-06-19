@@ -1,0 +1,45 @@
+---
+version: 0.2
+
+env:
+  shell: bash
+  git-credential-helper: "yes"
+  variables:
+    AWS_REPO: "https://git-codecommit.us-east-1.amazonaws.com/v1/repos/gcp-coordinator-deploy"
+
+phases:
+  install:
+    on-failure: ABORT
+    commands:
+      - |
+        if [[ ! -d .tfenv ]] ; then
+            git clone --quiet --depth=1 \
+                https://github.com/tfutils/tfenv.git $PWD/.tfenv
+        fi
+        export PATH="$PWD/.tfenv/bin:$PATH"
+        export TFENV_CURL_OUTPUT=0
+        tfenv use ${TERRAFORM_VERSION} | grep Default
+      - |
+        sudo cat >/etc/yum.repos.d/google-cloud-sdk.repo << EOM
+        [google-cloud-cli]
+        name=Google Cloud CLI
+        baseurl=https://packages.cloud.google.com/yum/repos/cloud-sdk-el8-x86_64
+        enabled=1
+        gpgcheck=1
+        repo_gpgcheck=0
+        gpgkey=https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+        EOM
+      - sudo yum install -qy google-cloud-cli
+      - sudo yum install -y dos2unix
+
+  build:
+    on-failure: ABORT
+    commands:
+      - chmod +x ${CODEBUILD_SRC_DIR}/*.sh
+      - dos2unix ${CODEBUILD_SRC_DIR}/tf_action.sh
+      - bash ${CODEBUILD_SRC_DIR}/tf_action.sh
+
+artifacts:
+   base-directory: ${CODEBUILD_SRC_DIR}/
+   files:
+     - '*'
